@@ -1,0 +1,602 @@
+// I know the current naming is bad
+
+global function Hopup_Point_Milestone_Reached
+global function GetWeaponAllCurrentlyUnlockedHopups
+global function SetWeaponAllCurrentlyUnlockedHopups
+global function IntegratedHopupSystem_Init 
+// ^ currently in SERVER + CLIENT section
+global function CodeCallback_UnlockedHopup
+global function CheckHopupPoints_OnDamage
+global function GetHighestHopupMilestone
+global function GetSupportedLockedHopups
+global function GetHopupUnlockedMilestone
+#if CLIENT
+global function ServerToClient_DisplayRUIHint
+#endif
+
+
+#if SERVER
+asset SUPPORTED_HOPUP_DATATABLE_ASSET = $""
+#endif
+
+
+// hijack on damaged callbacks to increase hop-up points
+
+// hijack already existing (pre-existing) EVO Points system
+
+// either do an engine patch to be able to read hop-up point thresholds for unlocking hop-ups 
+// directly from inside a weapon's .txt config, or use a global struct or enum
+
+// Other files: _entitystructs.gnut: added int currentWeaponHopupPoints to ServerWeaponStruct (weapon.w)
+//              _utility_shared.nut: WEAPON SCRIPTS ONLY!
+//              sh_init.gnut       : TODO - add IntegratedHopupSystem_Init
+//              _codecallbacks.gnut: TODO - add callbacks
+//              cl_weapon_status.gnut: UpdateFireSelectHint()
+
+// Important callbacks: _codecallbacks_common.gnut: AddEntityCallback_OnDamaged(entity, functionref()) 
+//                                                 - but we want on damage dealt, no?
+//                                                  AddDamageCallback
+
+// How to have an empty string array? How do we tell that it's empty? If we do array.len() > 0, if we use "NONE" as a member, that condition will always be true, so we'll have to check we don't add mod "NONE" on each iteration through the lockedModArray
+
+// We also need to check when we get to the end of the array <- foreach mod in lockedModArray takes care of this
+
+struct {
+
+table<entity, string> PlayerToLastUnlockedModStringTable
+
+}file
+
+
+global table<string, int> lockedHopupPointThresholdsTable = {
+    // Hop-up point value necessary to unlock locked Hop-ups
+    Hopup_Shield_Breaker            = 500,      // Disruptor Rounds
+    Hopup_Unshielded_Dmg            = 500,      // Hammerpoint Rounds
+    Hopup_Double_Tap                = 375,      // Double Tap Trigger
+    Hopup_Turbocharger_ESAW         = 500,      // Turbocharger, Devotion version
+    Hopup_Turbocharger_Energy_AR    = 600,      // Turbocharger, Havoc version
+    Hopup_Paintball_Rounds          = 425,      // Graffiti Mod
+    Hopup_Selectfire_PDW            = 375,      // Selectfire Receiver, Prowler version
+    Hopup_Selectfire_Defender       = 450,      // Selectfire Receiver, Charge Rifle version
+    Hopup_Dual_Shell                = 300,      // Dual Shell
+    Hopup_Smart_Reload              = 350,      // Boosted Loader
+    Hopup_Kinetic_Feeder            = 400,      // Kinetic Feeder
+    Hopup_Marksmans_Tempo           = 400,      // Deadeye's Tempo
+    Hopup_Shatter_Rounds            = 350,      // Shatter Caps
+    Hopup_Headshot_Dmg              = 300,      // Skullpiercer Rifling
+    Hopup_Highcal_Rounds            = 300,      // Anvil Receiver
+    Hopup_Energy_Choke              = 300,      // Precision Choke
+    Hopup_Gunshield_Generator       = 500,      // Gunshield Generator
+    NONE                            = 0         // EMPTY
+}
+
+
+
+global enum eHopupList {
+// Hop-up point value necessary to unlock locked Hop-ups
+
+Hopup_Shield_Breaker,           // Disruptor Rounds
+Hopup_Unshielded_Dmg,           // Hammerpoint Rounds
+Hopup_Double_Tap,               // Double Tap Trigger
+Hopup_Turbocharger_ESAW,        // Turbocharger, Devotion version
+Hopup_Turbocharger_Energy_AR,   // Turbocharger, Havoc version
+Hopup_Paintball_Rounds,         // Graffiti Mod
+Hopup_Selectfire_PDW,           // Selectfire Receiver, Prowler version
+Hopup_Selectfire_Defender,      // Selectfire Receiver, Charge Rifle version
+Hopup_Dual_Shell,               // Dual Shell
+Hopup_Smart_Reload,             // Boosted Loader
+Hopup_Kinetic_Feeder,           // Kinetic Feeder
+Hopup_Marksmans_Tempo,          // Deadeye's Tempo
+Hopup_Shatter_Rounds,           // Shatter Caps
+Hopup_Headshot_Dmg,             // Skullpiercer Rifling
+Hopup_Highcal_Rounds,           // Anvil Receiver
+Hopup_Energy_Choke,             // Precision Choke
+Hopup_Gunshield_Generator,      // Gunshield Generator
+NONE                            // Locked Hop-up
+
+}
+
+
+global table< string, array<string> > SUPPORTED_LOCKED_HOPUPS_TABLE = { 
+
+
+mp_weapon_3030 =            ["Hopup_Dual_Shell"],     
+mp_weapon_alternator_smg =  ["Hopup_Double_Tap", "Hopup_Shield_Breaker"],
+mp_weapon_autopistol =      ["Hopup_Shield_Breaker"] // 
+mp_weapon_bow =             ["NONE"], // Bocek Compound Bow
+mp_weapon_car =             ["NONE"],
+mp_weapon_defender =        ["Hopup_Selectfire_Defender"], // Charge Rifle
+mp_weapon_dmr =             ["Hopup_Paintball_Rounds"], // Longbow DMR
+mp_weapon_double_take =     ["Hopup_Energy_Choke"], // Triple Take
+mp_weapon_dragon_lmg =      ["NONE"],
+mp_weapon_energy_ar =       ["Hopup_Turbocharger_Energy_AR"], // Havoc
+mp_weapon_energy_shotgun =  ["Hopup_Energy_Choke"], // Peacekeeper
+mp_weapon_esaw =            ["Hopup_Turbocharger_ESAW"], // Devotion
+mp_weapon_g2 =              ["NONE"],
+mp_weapon_hemlok  =         ["NONE"],
+mp_weapon_lmg =             ["NONE"], // Spitfire
+mp_weapon_lstar =           ["Hopup_Paintball_Rounds"],
+mp_weapon_mastiff =         ["Hopup_Dual_Shell"],
+mp_weapon_nemesis =         ["NONE"],
+mp_weapon_pdw =             ["Hopup_Selectfire_PDW"], // Prowler
+mp_weapon_r97 =             ["NONE"],
+mp_weapon_rspn101 =         ["NONE"],
+mp_weapon_semipistol =      ["Hopup_Unshielded_Dmg"], // P2020
+mp_weapon_sentinel =        ["NONE"],
+mp_weapon_shotgun =         ["Hopup_Double_Tap"], // EVA-8 Shotgun / W1128
+mp_weapon_shotgun_pistol =  ["Hopup_Paintball_Rounds"], // Mozambique
+mp_weapon_vinson =          ["NONE"], // VK-47 Flatline
+mp_weapon_volt_smg =        ["NONE"],
+mp_weapon_wingman =         ["Hopup_Paintball_Rounds"]
+
+}
+
+
+global table< string, asset > HOPUP_RUI_TABLE = { 
+
+Hopup_Shield_Breaker            = $"rui/pilot_loadout/mods/hopup_shield_breaker",           // Disruptor Rounds
+Hopup_Unshielded_Dmg            = $"rui/pilot_loadout/mods/hopup_unshielded_dmg",           // Hammerpoint Rounds
+Hopup_Double_Tap                = $"rui/pilot_loadout/mods/hopup_doubletap",                // Double Tap Trigger
+Hopup_Turbocharger_ESAW         = $"rui/pilot_loadout/mods/hopup_turbocharger",             // Turbocharger, Devotion version
+Hopup_Turbocharger_Energy_AR    = $"rui/pilot_loadout/mods/hopup_turbocharger",             // Turbocharger, Havoc version
+Hopup_Paintball_Rounds          = $"rui/pilot_loadout/mods/TEMP_hopup",                     // Graffiti Mod
+Hopup_Selectfire_PDW            = $"rui/pilot_loadout/mods/hopup_autofire",                 // Selectfire Receiver, Prowler version
+Hopup_Selectfire_Defender       = $"rui/pilot_loadout/mods/hopup_autofire",                 // Selectfire Receiver, Charge Rifle version
+Hopup_Dual_Shell                = $"rui/pilot_loadout/mods/TEMP_hopup",                     // Dual Shell
+Hopup_Smart_Reload              = $"rui/pilot_loadout/mods/TEMP_hopup",                     // Boosted Loader
+Hopup_Kinetic_Feeder            = $"rui/pilot_loadout/mods/TEMP_hopup",                     // Kinetic Feeder
+Hopup_Marksmans_Tempo           = $"rui/pilot_loadout/mods/TEMP_hopup",                     // Deadeye's Tempo
+Hopup_Shatter_Rounds            = $"rui/pilot_loadout/mods/TEMP_hopup",                     // Shatter Caps
+Hopup_Headshot_Dmg              = $"rui/pilot_loadout/mods/hopup_skullpiercer",             // Skullpiercer Rifling
+Hopup_Highcal_Rounds            = $"rui/pilot_loadout/mods/hopup_highcal",                  // Anvil Receiver
+Hopup_Energy_Choke              = $"rui/pilot_loadout/mods/hopup_energy_choke",             // Precision Choke
+Hopup_Gunshield_Generator       = $"rui/pilot_loadout/mods/TEMP_hopup",                     // Gunshield Generator
+NONE                            = $"mdl/weapons_r5/loot/_master/w_loot_wep_mods_chip.rmdl"  // Locked Hop-up
+
+}
+
+
+global table< string, string > HOPUP_RUI_NAMES_READABLE = { 
+
+Hopup_Shield_Breaker            = "Disruptor Rounds",            // Disruptor Rounds
+Hopup_Unshielded_Dmg            = "Hammerpoint Rounds",          // Hammerpoint Rounds
+Hopup_Double_Tap                = "Double Tap Trigger",          // Double Tap Trigger
+Hopup_Turbocharger_ESAW         = "Turbocharger",                // Turbocharger, Devotion version
+Hopup_Turbocharger_Energy_AR    = "Turbocharger",                // Turbocharger, Havoc version
+Hopup_Paintball_Rounds          = "Graffiti Mod",                // Graffiti Mod
+Hopup_Selectfire_PDW            = "Selectfire Receiver",         // Selectfire Receiver, Prowler version
+Hopup_Selectfire_Defender       = "Selectfire Receiver",         // Selectfire Receiver, Charge Rifle version
+Hopup_Dual_Shell                = "Dual Shell",                  // Dual Shell
+Hopup_Smart_Reload              = "Boosted Loader",              // Boosted Loader
+Hopup_Kinetic_Feeder            = "Kinetic Feeder",              // Kinetic Feeder
+Hopup_Marksmans_Tempo           = "Deadeye's Tempo",             // Deadeye's Tempo
+Hopup_Shatter_Rounds            = "Shatter Caps",                // Shatter Caps
+Hopup_Headshot_Dmg              = "Skullpiercer Rifling",        // Skullpiercer Rifling
+Hopup_Highcal_Rounds            = "Anvil Receiver",              // Anvil Receiver
+Hopup_Energy_Choke              = "Precision Choke",             // Precision Choke
+Hopup_Gunshield_Generator       = "Gunshield Generator",         // Gunshield Generator
+NONE                            = "Locked Hop-Up"                // Locked Hop-up
+
+}
+
+// Global table to store compatible locked Hop-ups per-weapon instance
+// Table inherits scope of the named struct (global) ?
+
+global struct weaponHopupDatatableStruct {
+
+table< entity, array<string> > weaponHopupTable
+
+// instance 1 of mp_weapon_semipistol has ["Hopup_Unshielded_Dmg"],
+// instance 2 of mp_weapon_semipistol has ["Hopup_Unshielded_Dmg"],
+// etc.
+// need to add all weapon instances that are active in this table
+// Declare with weaponHopupDatable WeaponHopupDatatable
+// Then, for each active weapon, WeaponHopupDatatable[weapon].append(mod)
+    
+} 
+
+
+// Initialization function
+
+void function IntegratedHopupSystem_Init() 
+{
+
+// Initialize weaponHopupTable as a member of the WeaponHopupDatatable instance of the weaponHopupDatatablStruct struct
+// Access weaponHopupTable with WeaponHopupDatatable.weaponHopupTable[weaponEntity] <- make sure the keys are weapon ENTITIES, NOT strings!!!
+
+#if SERVER
+
+    string datatableAssetString = GetCurrentPlaylistVarString( "integrated_hopups_datatable_path", "" )
+    asset datatableAssetStringToAsset = CastStringToAsset( datatableAssetString )
+    SUPPORTED_HOPUP_DATATABLE_ASSET = datatableAssetStringToAsset
+    weaponHopupDatatableStruct WeaponHopupDatatable
+
+    // Dynamic loading of supported hop-ups from datatable
+    var supportedHopupDataTable = GetDataTable( SUPPORTED_HOPUP_DATATABLE_ASSET )
+    int numRows = GetDatatableRowCount( supportedHopupDataTable )
+
+ 	for ( int i = 0; i < numRows; i++ )
+    {
+          // Get the supported hop-ups
+          string weaponNameFromDataTable = GetDataTableString( supportedHopupDataTable, i, weaponNameColumn )
+          array<string> supportedHopupsArrayFromDataTable = split( GetDataTableString( supportedHopupDataTable, i, supportedHopupsColumn ), ", " )
+          SUPPORTED_LOCKED_HOPUPS_TABLE[weaponNameFromDataTable] <- supportedHopupsArrayFromDataTable
+          // Get the hop-up thresholds 
+          array<string> supportedHopupsThresholdsArrayFromDataTable = split( GetDataTableString( supportedHopupDataTable, i, hopupThresholdsColumn ), ", " ) 
+          foreach( string threshold in supportedHopupsThresholdsArrayFromDataTable )
+          {
+                lockedHopupPointThresholdsTable[weaponNameFromDataTable] <- int( threshold )
+          }
+          // Get the hop-up readable names   
+          string hopupInternalName = GetDataTableString( supportedHopupDataTable, i, hopupInternalNameColumn )      
+          string hopupReadableName = GetDataTableString( supportedHopupDataTable, i, hopupReadableNameColumn )
+          HOPUP_RUI_NAMES_READABLE[hopupInternalName] <- hopupReadableName
+          // Get the hop-up's corresponding RUI asset
+          string hopupRUIAssetString = GetDataTableString( supportedHopupDataTable, i, hopupRUIPathColumn )
+          asset hopupRUIAsset = CastStringToAsset( hopupRUIAssetString )
+          HOPUP_RUI_TABLE[hopupInternalName] <- hopupRUIAsset
+
+    }
+            
+
+
+#endif
+
+
+
+#if CLIENT
+entity player = GetLocalClientPlayer()
+file.PlayerToLastUnlockedModStringTable[player] = "NONE"
+#endif
+
+
+ScriptRemote_RegisterClientFunction( "ServerToClient_DisplayRUIHint", "entity" )
+
+
+#if SERVER
+AddPostDamageCallback("player", CheckHopupPoints_OnDamage ) // first arg is the victim (another player), second is the callback function. 
+// We need to get the inflictor - the weapon entity - and increase weapon.w.currentWeaponHopupDamage by the amount of damage dealt
+#endif
+// CodeCallback_UnlockedHopup(entity weapon) <- Added this callback that handles unlocking a Hop-up 
+// CodeCallback_UnlockedHopup allback is located inside a DamageCallback, triggered by a check 
+// that verifies if(Hopup_Point_Milestone_Reached(weapon)) {}
+
+
+
+
+}
+
+
+
+void function CheckHopupPoints_OnDamage(entity victimPlayerEntity, var damageInfo)
+{
+
+entity weapon = DamageInfo_GetWeapon( damageInfo )
+string weaponName = weapon.GetWeaponClassName()
+entity owner = DamageInfo_GetAttacker( damageInfo )
+
+#if SERVER
+// First condition
+// Need to make sure there are unlocked Hop-ups for the weapon instance
+//
+// Second condition
+// Need to make sure we don't keep calling the CodeCallback every single time 
+// the player does damage after reaching the highest milestone on the weapon 
+// (completely useless, waste of computational resources)
+
+int hopupDamageBuffer = 100 
+int damageDealtForCurrentShot = DamageInfo_GetDamage( damageInfo).tointeger()
+
+if (IsValid(owner) &&owner.IsPlayer())
+{
+    weapon.w.currentWeaponHopupPoints += damageDealtForCurrentShot
+
+        if(weapon.GetWeaponSettingInt(eWeaponVar.damage_near_value))
+            {
+                int weaponNearDamageValue = weapon.GetWeaponSettingInt(eWeaponVar.damage_near_value)
+                hopupDamageBuffer = weaponNearDamageValue - 1
+            }
+
+}
+
+if(weapon.w.currentWeaponHopupPoints <= hopupDamageBuffer)
+    {
+
+    }
+
+if(GetWeaponAllCurrentlyUnlockedHopups(weapon).len() > 0 && weapon.w.currentWeaponHopupPoints <= (GetHighestHopupMilestone(weapon) + hopupDamageBuffer) && GetWeaponAllCurrentlyUnlockedHopups(weapon)[0] != "NONE") // 100 dmg points buffer
+// EXCEPTION: A weapon's Hop-up Points can be UNDER the max Hop-up Milestone and then SURPASS it after one chunk of damage! 
+// This needs to be handled!!
+// A lazy solution would be to just add a damage buffer, such as 100, to account for the per-shot damage of a lot of weapons,
+// at the cost of a few unnecessary function calls
+
+// A better solution would be to get the per-shot damage amount of the specific weapon and add (per-shot-damage - 1) as a buffer
+// i.e.: weapon.w.currentWeaponHopupPoints = 499 and highestMilestone = 500, the weapon's per-shot damage is 15,
+// We would add 14 as a buffer and check with <= (we need to check if it's equal as well because if we only do <, then
+// the Hop-up isn't unlocked, cause the block doesn't execute at the exact Hop-up milestone amount)
+
+{
+    #if SERVER   
+    CodeCallback_UnlockedHopup(weapon)
+    Remote_CallFunction_NonReplay(owner, "ServerToClient_DisplayRUIHint", owner)
+    #endif
+}
+   else
+{
+   #if DEVELOPER
+   printt("[INTEGRATED HOP-UP SYSTEM] No Hop-up unlocked on this damage chunk!")
+   #endif
+}   
+#endif
+
+}
+
+
+
+
+
+// Added the currentWeaponHopupDamage attribute to entity.w server struct! Each instance is constructed with it!
+
+
+// When a weapon instance deals damage, we need increase the value weapon.w.currentWeaponHopupDamage by that same amount
+
+// Need a callback on every chunk of damage dealt by a weapon that checks if 
+// a Hop-up Milestone has been reached and if so, calls CodeCallback_UnlockedHopup()
+
+
+
+
+int function GetHighestHopupMilestone(entity weapon)
+{
+
+string weaponName = weapon.GetWeaponClassName()
+int arrayLength = SUPPORTED_LOCKED_HOPUPS_TABLE[weaponName].len()
+array<string> arrayHopups = SUPPORTED_LOCKED_HOPUPS_TABLE[weaponName]
+int highestMilestone = 0
+
+// iterative approach
+
+    for(int i = 0; i< arrayLength; i++)
+        {
+          if(lockedHopupPointThresholdsTable[arrayHopups[i]] > highestMilestone)
+          highestMilestone = lockedHopupPointThresholdsTable[arrayHopups[i]]
+        }   
+
+return highestMilestone
+
+}
+
+
+// This function is good
+
+void function CodeCallback_UnlockedHopup(entity weapon)
+{
+
+  //  array<string> alreadyAddedMods = weapon.GetMods()
+    int arrayLength = GetWeaponAllCurrentlyUnlockedHopups(weapon).len()
+    entity player = weapon.GetWeaponOwner()
+    string weaponName
+
+// foreach (mod in )
+
+    for(int i = 0; i< arrayLength; i++)
+    {
+            if( !(weapon.HasMod(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower())) )
+            {
+
+// TODO: GET RID OF THIS HARDCODED CANCER!!!!!!!!!!!!!!!! CHECK DYNAMICALLY!!!
+
+
+//////////////// ALT FIRE MODES ///////////////////////////////////////////////////////////////////////////////////
+
+                if(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower() == "hopup_double_tap")
+                {
+                    weaponName = weapon.GetWeaponClassName()
+                    switch(weaponName)
+                    case "mp_weapon_alternator_smg":
+                        // currently no custom altfire registration in native code, gotta check out datatables and stuff
+                     {
+                        weapon.AddMod("altfire_double_tap")
+                        file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Double_Tap"
+                        printt("[INTEGRATED HOPUP SYSTEM] Added Double Tap mod to weapon " + weaponName)
+                        break
+                     }  
+                    case "mp_weapon_g2":
+                        // currently no custom altfire registration in native code, gotta check out datatables and stuff
+                     {
+                        weapon.AddMod("altfire_double_tap")
+                        file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Double_Tap"
+                        printt("[INTEGRATED HOPUP SYSTEM] Added Double Tap mod to weapon " + weaponName)
+                        break
+                     }    
+                    case "mp_weapon_shotgun":
+                        // currently no custom altfire registration in native code, gotta check out datatables and stuff
+                     {
+                        weapon.AddMod("altfire_double_tap")
+                        file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Double_Tap"
+                        printt("[INTEGRATED HOPUP SYSTEM] Added Double Tap mod to weapon " + weaponName)
+                        break
+                     }                         
+                }
+
+                if(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower() == "hopup_highcal")
+                {
+                    weapon.AddMod("altfire_highcal")
+                    file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Highcal" 
+                    printt("[INTEGRATED HOPUP SYSTEM] Added Anvil Receiver mod to weapon " + weapon.GetWeaponClassName())     
+                                 
+                }
+
+                if(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower() == "hopup_highcal")
+                {
+                    weapon.AddMod("altfire_highcal")
+                    file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Highcal" 
+                    printt("[INTEGRATED HOPUP SYSTEM] Added Anvil Receiver mod to weapon " + weapon.GetWeaponClassName())     
+                                 
+                }
+
+
+//////////////// HOP-UPS WITH DIFFERENT UNLOCK THRESHOLDS FOR DIFFERENT WEAPONS ///////////////////////////////////////////////////////////////////////////////////
+
+
+                if(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower() == "hopup_turbocharger_esaw")
+                {
+                    weapon.AddMod("hopup_turbocharger")
+                    file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Turbocharger" 
+                    printt("[INTEGRATED HOPUP SYSTEM] Added Turbocharger mod to weapon " + weaponName)     
+                                 
+                }
+
+                if(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower() == "hopup_turbocharger_energy_ar")
+                {
+                    weapon.AddMod("hopup_turbocharger")
+                    file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Turbocharger" 
+                    printt("[INTEGRATED HOPUP SYSTEM] Added Turbocharger mod to weapon " + weaponName)     
+                                 
+                }
+
+                if(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower() == "hopup_selectfire_pdw")
+                {
+                    weapon.AddMod("hopup_turbocharger")
+                    file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Turbocharger" 
+                    printt("[INTEGRATED HOPUP SYSTEM] Added Selectfire mod to weapon " + weaponName)     
+                                 
+                }
+
+                if(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower() == "hopup_selectfire_defender")
+                {
+                    weapon.AddMod("hopup_turbocharger")
+                    file.PlayerToLastUnlockedModStringTable[player] <- "Hopup_Turbocharger" 
+                    printt("[INTEGRATED HOPUP SYSTEM] Added Selectfire mod to weapon " + weaponName)     
+                                 
+                }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+                weapon.AddMod(GetWeaponAllCurrentlyUnlockedHopups(weapon)[i].tolower())
+                file.PlayerToLastUnlockedModStringTable[player] <- GetWeaponAllCurrentlyUnlockedHopups(weapon)[i]   
+                printt("[INTEGRATED HOPUP SYSTEM] Added unlocked mod " + GetWeaponAllCurrentlyUnlockedHopups(weapon)[i] + " to weapon " + weapon.GetWeaponClassName())
+
+            }
+    }
+
+}
+
+
+// This function is good
+
+array<string> function GetSupportedLockedHopups(entity weapon)
+{
+string weaponName = weapon.GetWeaponClassName()    
+array<string> weaponSupportedLockedHopups = SUPPORTED_LOCKED_HOPUPS_TABLE[weaponName]
+
+return weaponSupportedLockedHopups
+
+}
+
+
+ 
+bool function Hopup_Point_Milestone_Reached(entity  weapon, string hopupName, ...)
+{
+
+entity player = weapon.GetWeaponOwner()
+string className = weapon.GetWeaponClassName()
+int milestone = GetHopupUnlockedMilestone(hopupName)
+#if SERVER
+int weaponHopupPoints = weapon.w.currentWeaponHopupPoints
+#endif
+
+#if SERVER
+if (weaponHopupPoints >= milestone )
+    return true
+
+return false
+#endif
+
+return false
+
+}
+
+
+// This function is good
+
+int function GetHopupUnlockedMilestone(string hopupName)
+
+{
+
+int hopupMilestone = lockedHopupPointThresholdsTable[hopupName]
+
+return hopupMilestone
+
+}
+
+// This function is good
+
+array<string> function GetWeaponAllCurrentlyUnlockedHopups(entity weapon)
+
+{
+
+string weaponName = weapon.GetWeaponClassName()
+array<string> lockedModList = SUPPORTED_LOCKED_HOPUPS_TABLE[weaponName]
+int lockedModListArrayLength = lockedModList.len()
+array<string> unlockedHopups
+
+if (lockedModList.len() > 0) 
+    {
+ //   foreach (string mod in lockedModList) // can't iterate in arrays with in
+     for(int i = 0; i< lockedModListArrayLength; i++)
+
+        {
+     if (Hopup_Point_Milestone_Reached(weapon, lockedModList[i]) && !unlockedHopups.contains(lockedModList[i]))
+            {                
+            unlockedHopups.append(lockedModList[i])        
+            }
+        }
+    return unlockedHopups
+    }
+
+printt("[INTEGRATED HOPUP SYSTEM] Weapon has no supported locked Hop-ups")
+return ["NONE"]
+    
+}
+
+// This function is good
+
+void function SetWeaponAllCurrentlyUnlockedHopups(entity weapon)
+
+{
+
+string weaponName = weapon.GetWeaponClassName()
+array<string> unlockedHopupsArray = GetWeaponAllCurrentlyUnlockedHopups(weapon)
+// array<string> alreadyAddedHopupsArray = weapon.GetMods()
+int unlockedHopupsArrayLength = unlockedHopupsArray.len()
+
+
+if (unlockedHopupsArrayLength > 0)
+    {
+    for(int i = 0; i < unlockedHopupsArrayLength; i++)
+        {
+        if(!( weapon.HasMod(unlockedHopupsArray[i].tolower() ) ))
+        weapon.AddMod(unlockedHopupsArray[i].tolower())
+        printt("[INTEGRATED HOPUP SYSTEM] Added mod " + unlockedHopupsArray[i].tolower() + " to weapon " + weaponName)
+        }
+    }
+}
+
+
+
+#if CLIENT
+void function ServerToClient_DisplayRUIHint(entity player)
+{
+
+    entity weapon = player.GetActiveWeapon(eActiveInventorySlot.mainHand)
+    string lastHopupUnlocked = file.PlayerToLastUnlockedModStringTable[player]
+    printt("[INTEGRATED HOPUP SYSTEM] lastHopupUnlocked = " + lastHopupUnlocked)
+
+
+    AddPlayerHint( 5.0, 0.25, HOPUP_RUI_TABLE[lastHopupUnlocked], "Unlocked Hop-up " + HOPUP_RUI_NAMES_READABLE[lastHopupUnlocked])
+
+
+}
+#endif

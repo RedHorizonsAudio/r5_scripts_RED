@@ -234,8 +234,6 @@ void function SV_CL_Init()
 	MpAbilityCryptoDrone_Init()
 	MpAbilityCryptoDroneEMP_Init()
 	MpAbilitySilence_Init()
-	MpMaggieCommon_Init()
-	MpAbilityWreckingBall_Init()
 	MpSpaceElevator_Init()
 	MpSpaceElevatorAbility_Init()
 	MpWeaponSmartPistol_Init()
@@ -252,6 +250,10 @@ void function SV_CL_Init()
 	MpWeaponArcBolt_Init()
 	MpWeaponMountedTurretWeapon_Init()
 	MpWeaponDragon_LMG_Init()
+
+
+	// INTEGRATED HOPUP SYSTEM INIT
+	IntegratedHopupSystem_Init()
 
     // Zipline Utility
     #if SERVER

@@ -1365,6 +1365,34 @@ global struct ServerWeaponStruct
 	int ornull    translocate_doubleJumpBlockStatusEffectID = null
 	int ornull    translocate_wallHangBlockStatusEffectID = null
 
+    // SERVER, INTEGRATED LOCKED HOP-UP SYSTEM
+	int currentWeaponHopupPoints = 0
+
+
+
+
+
+
+//////////////////////////////////////////////////////////
+
+// MARKSMAN'S TEMPO, SHATTER ROUNDS AND OTHER HOP-UPS
+
+// USED FOR RUI?
+
+//int ScriptInt1 = 0
+//	float ScriptTime1 = 0.0 // Time()
+//	float ScriptFloat0 = 0.0
+	
+//////////////////////////////////////////////////////////
+
+
+
+
+
+
+
+
+
 	float startChargeTime = 0.0
 	bool wasCharged = false
 	// bool initialized = false
