@@ -296,6 +296,33 @@ WeaponData
 			"uses_ammo_pool"								"1"
 		}
 
+
+
+        hopup_double_tap
+        {
+            //exists to allow altfire_double_tap toggle mod
+        }
+
+        altfire_double_tap
+        {
+            "mod_activity_modifier"							"fire_select"
+            "projectile_trail_effect_0"     				"P_tracer_proj_smg_hammer_point"
+            //"impact_effect_table" 							"hammer_point_bullet"
+	    "ammo_per_shot"                                "2"
+
+ 	    "projectiles_per_shot"                          "2"
+	    //"projectile_trail_effect_0" 					"P_mastiff_proj"
+	    //"projectile_lifetime" 							"2.0"
+	    //"projectile_flight_sound"                       "weapon_mastiff_projectile_crackle"
+
+	    "blast_pattern"									"mastiff_3" // needs its own blast pattern, which can now be added thanks to Zee expanding the engine limitswRNEEw
+	    "blast_pattern_default_scale"        			"1.400000"
+
+            "fire_rate"                                     "7.0" // put retail value here
+        }
+
+
+
 		hopup_shield_breaker
 		{
 			"damage_shield_scale"                       "1.20"
